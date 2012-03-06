@@ -947,7 +947,6 @@ static void
 thread_db_create_inferior (char *exec_file, char *allargs, char **env,
 			   int from_tty)
 {
-printf ("CFU\n");
   unpush_target (&thread_db_ops);
   using_thread_db = 0;
   target_beneath->to_create_inferior (exec_file, allargs, env, from_tty);
