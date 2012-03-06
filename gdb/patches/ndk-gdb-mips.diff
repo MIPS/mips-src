@@ -1,0 +1,13 @@
+Index: gdb/gdb-6.6/sim/common/sim-signal.c
+===================================================================
+--- gdb.orig/gdb-6.6/sim/common/sim-signal.c	2011-11-28 16:01:03.000000000 -0800
++++ gdb/gdb-6.6/sim/common/sim-signal.c	2011-11-28 18:20:13.000000000 -0800
+@@ -27,7 +27,7 @@
+    to not think the process has died (so it can be debugged at the point of
+    failure).  */
+ 
+-#ifdef _MSC_VER
++#ifdef _WIN32
+ #ifndef SIGTRAP
+ #define SIGTRAP 5
+ #endif

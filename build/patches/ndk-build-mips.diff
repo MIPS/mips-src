@@ -1,0 +1,46 @@
+Index: build/configure
+===================================================================
+--- build.orig/configure	2011-11-28 16:01:27.000000000 -0800
++++ build/configure	2011-11-28 18:22:37.713742000 -0800
+@@ -1376,6 +1376,7 @@ test -n "$target_alias" &&
+ # 2. arm-eabi (for Android kernel)
+ # 3. arm-newlib-eabi (for gcc testing)
+ # 4.i[3456]86-*-linux-gnu, x86-*-linux-gnu (for x86 targets)
++# 5. mips*-*-linux* (for mips targets)
+ 
+ GDB_TARGET=$target
+ case $target in
+@@ -1389,6 +1390,10 @@ case $target in
+   i[3456]86-*-linux-gnu | x86_64-*-linux-gnu)
+     BUILD_ANDROID_GCC=yes
+     ;;
++  mips*-*-linux*)
++    BUILD_ANDROID_GCC=yes
++    GDB_TARGET=mips-linux-gnu
++    ;;
+   *)
+     { { echo "$as_me:$LINENO: error: Unsupported target $target." >&5
+ echo "$as_me: error: Unsupported target $target." >&2;}
+Index: build/configure.ac
+===================================================================
+--- build.orig/configure.ac	2011-11-28 16:01:27.000000000 -0800
++++ build/configure.ac	2011-11-28 18:22:46.905420000 -0800
+@@ -23,6 +23,7 @@ AC_CANONICAL_SYSTEM
+ # 2. arm-eabi (for Android kernel)
+ # 3. arm-newlib-eabi (for gcc testing)
+ # 4.i[3456]86-*-linux-gnu, x86-*-linux-gnu (for x86 targets)
++# 5. mips*-*-linux* (for mips targets)
+ 
+ GDB_TARGET=$target
+ case $target in
+@@ -36,6 +37,10 @@ case $target in
+   i[[3456]]86-*-linux-gnu | x86_64-*-linux-gnu)
+     BUILD_ANDROID_GCC=yes
+     ;;
++  mips*-*-linux*)
++    BUILD_ANDROID_GCC=yes
++    GDB_TARGET=mips-linux-gnu
++    ;;
+   *)
+     AC_MSG_ERROR(Unsupported target $target.);
+ esac

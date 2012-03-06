@@ -1,0 +1,551 @@
+# -------------------------------
+# Standard Autoconf-set variables
+# -------------------------------
+VPATH=@srcdir@
+
+build_alias=@build_alias@
+build_vendor=@build_vendor@
+build_os=@build_os@
+build=@build@
+host_alias=@host_alias@
+host_vendor=@host_vendor@
+host_os=@host_os@
+host=@host@
+target_alias=@target_alias@
+target_vendor=@target_vendor@
+target_os=@target_os@
+target_cpu=@target_cpu@
+target=@target@
+
+program_transform_name = @program_transform_name@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+srcdir = @srcdir@
+abs_srcdir = @abs_srcdir@
+
+bindir = @bindir@
+sbindir = @sbindir@
+libexecdir = @libexecdir@
+datadir = @datadir@
+sysconfdir = @sysconfdir@
+sharedstatedir = @sharedstatedir@
+localstatedir = @localstatedir@
+libdir = @libdir@
+includedir = @includedir@
+oldincludedir = @oldincludedir@
+infodir = @infodir@
+datarootdir = @datarootdir@
+docdir = @docdir@
+pdfdir = @pdfdir@
+htmldir = @htmldir@
+mandir = @mandir@
+
+builddir = @builddir@
+abs_builddir = @abs_builddir@
+#
+# miscellaneous variables
+#
+TOPLEVEL_CONFIGURE_ARGUMENTS:=@TOPLEVEL_CONFIGURE_ARGUMENTS@
+baseargs = @baseargs@
+GCC_MIN_VERSION_4_3_0:=@GCC_MIN_VERSION_4_3_0@
+GCC_MIN_VERSION_4_5_0:=@GCC_MIN_VERSION_4_5_0@
+PACKAGE_TO_SRCDIR:=@package_to_srcdir@
+BUILD_ANDROID_GCC:=@BUILD_ANDROID_GCC@
+GDB_TARGET:=@GDB_TARGET@
+
+# We need to figure out how to get to top level source directory from
+# a package build directory. 
+# For host modules, accept cache file option, or specification as blank.
+
+
+BINUTILS_VERSION=binutils-@BINUTILS_VERSION@
+GOLD_VERSION=binutils-@GOLD_VERSION@
+GCC_VERSION=gcc-@GCC_VERSION@
+NEWLIB_VERSION=newlib-@NEWLIB_VERSION@
+GMP_VERSION=gmp-@GMP_VERSION@
+MPFR_VERSION=mpfr-@MPFR_VERSION@
+MPC_VERSION=mpc-@MPC_VERSION@
+GDB_VERSION=gdb-@GDB_VERSION@
+STAMP=touch
+
+TARGET_BINUTILS_BUILDDIR=$(abs_builddir)/$(BINUTILS_VERSION)
+TARGET_GCC_BUILDDIR=$(abs_builddir)/$(GCC_VERSION)
+TEMP_INSTALLDIR=$(abs_builddir)/temp-install
+
+# Figure out where to find the ld binary.
+FIND_TARGET_LD=\
+	`[ -d $(TARGET_BINUTILS_BUILDDIR)/gold ] && echo "gold" || echo "ld"`
+
+# We export these insteading when configuring target gcc and newlib
+TARGET_BINUTILS_EXPORTS= \
+export	AS_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/gas/as-new \
+	LD_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/$(FIND_TARGET_LD)/ld-new \
+	AR_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/binutils/ar \
+	NM_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/binutils/nm-new \
+	STRIP_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/binutils/strip-new \
+	RANLIB_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/binutils/ranlib \
+	OBJDUMP_FOR_TARGET=$(TARGET_BINUTILS_BUILDDIR)/binutils/objdump
+
+TARGET_MINIMAL_GCC_EXPORTS= \
+export	CC_FOR_TARGET="$(TARGET_GCC_BUILDDIR)/gcc/xgcc \
+		      -B $(TARGET_GCC_BUILDDIR)/gcc \
+		      -isystem $(TARGET_GCC_BUILDDIR)/gcc/include-fixed \
+		      -isystem $(TARGET_GCC_BUILDDIR)/gcc/include"
+#
+# We need -Os as the overrides below interfere with --enable-target-optspace.
+# We also need -mandroid for for target libraries to pass linking test
+# in configuration.
+# 
+# To build libstdc++ with RTTI and exceptions do:
+#
+#export CFLAGS_FOR_TARGET=-fexceptions
+#export CXXFLAGS_FOR_TARGET=-frtti
+#
+CFLAGS_FOR_TARGET+= -O2 -Os -g
+CXXFLAGS_FOR_TARGET+=$(CFLAGS_FOR_TARGET)
+LDFLAGS_FOR_TARGET=@LDFLAGS_FOR_TARGET@
+
+# Helper
+prefix-list = $(foreach e, $(2), $(join $1, $e))
+
+# find source directory for package. This can either be <srcdir>/<package>
+# or <objdir>/temp-src/<package>
+
+find-package-srcdir = $(shell \
+  if [ -f $(srcdir)/../$(firstword $(subst -, ,$1))/$(strip $1)/configure ]; then \
+     echo $(PACKAGE_TO_SRCDIR)/../$(firstword $(subst -, ,$1))/$(strip $1); \
+  elif [ -f $(abs_builddir)/temp-src/$(strip $1)/configure ]; then \
+    echo $(abs_builddir)/temp-src/$(strip $1) ; \
+  else \
+    echo 'error cannot find $(strip $1)' ; \
+  fi)
+
+# Set effective <build>, <host> and <target>.
+
+ifneq ($(build_alias),)
+cur_build := $(build_alias)
+else
+cur_build := $(build)
+endif
+
+ifneq ($(host_alias),)
+cur_host := $(host_alias)
+else
+cur_host := $(host)
+endif
+
+ifneq ($(target_alias),)
+cur_target := $(target_alias)
+else
+cur_target := $(target)
+endif
+
+# Define environment variables for canadian cross build.
+ifneq ($(cur_host),$(cur_build))
+canadian_build_env := \
+	export CC_FOR_BUILD=$(cur_build)-gcc ; \
+	export CC=$(cur_build)-gcc ; \
+	export CXX=$(cur_build)-g++ ;
+
+CANADIAN_ROOT := $(PWD)/host-${cur_build}
+canadian_env := \
+	export CC_FOR_BUILD=$(cur_build)-gcc ; \
+	export CC=$(cur_host)-gcc ; \
+	export CXX=$(cur_host)-g++ ; \
+	export AR=$(cur_host)-ar ; \
+	export RANLIB=$(cur_host)-ranlib ; \
+	export PATH="$(CANADIAN_ROOT)/install/bin:${PATH}" ;
+endif
+
+#
+# Make rules
+#
+
+.PHONY: all clean
+
+all: build
+
+# top level
+build: build-target-binutils build-target-gcc build-target-gdb
+
+install: install-target-binutils install-target-gcc install-target-gdb
+
+# To support canadian cross build we need to build build->target toolchain
+# as well as final host->target toolchain.
+ifneq ($(cur_host),$(cur_build))
+.PHONY: config-canadian-tools build-canadian-tools install-canadian-tools
+
+config-canadian-tools: stmp-config-canadian-tools
+stmp-config-canadian-tools:
+	([ -d $(CANADIAN_ROOT) ] || \
+	  mkdir $(CANADIAN_ROOT)) && \
+	($(canadian_build_env) \
+	 cd $(CANADIAN_ROOT) && \
+	 $(abs_srcdir)/configure $(baseargs) --build=$(cur_build) \
+		--host=$(cur_build) --target=$(cur_target)) && \
+	$(STAMP) $@
+
+build-canadian-tools: stmp-build-canadian-tools
+stmp-build-canadian-tools: stmp-config-canadian-tools
+	($(canadian_build_env) \
+	 cd $(CANADIAN_ROOT) && \
+	 $(MAKE)) && \
+	$(STAMP) $@
+
+install-canadian-tools: stmp-install-canadian-tools
+stmp-install-canadian-tools: stmp-build-canadian-tools
+	($(canadian_build_env) \
+	 cd $(CANADIAN_ROOT) && \
+	 $(MAKE) install prefix=$(CANADIAN_ROOT)/install) && \
+	$(STAMP) $@
+
+# When building canadian cross toolchain we cannot build GCC target libraries.
+# So we build the compilers only and copy the target libaries from
+# $(CANADIAN_ROOT)/install/ installation.
+gcc_build_target := all-gcc
+gcc_install_target := install-gcc
+install-target-gcc-multilibs: stmp-install-canadian-tools
+	mkdir -p $(prefix)/lib/gcc/
+	rsync -a $(CANADIAN_ROOT)/install/lib/gcc/ $(prefix)/lib/gcc/
+install-target-gcc-multilibs := install-target-gcc-multilibs
+
+# We add canadian_stmp dependency to rules that have no dependencies
+# on other modules.  This is to ensure that simple cross toolchain is built
+# before canadian cross toolchain.
+canadian_stmp := stmp-install-canadian-tools
+else
+gcc_build_target :=
+gcc_install_target := install
+install-target-gcc-multilibs :=
+canadian_stmp :=
+endif
+
+ifneq ($(BINUTILS_VERSION), $(GOLD_VERSION))
+build: build-target-gold
+install: install-target-gold
+endif
+
+# target binutils rules
+.PHONY: config-target-binutils build-target-binutils install-target-binutils
+config-target-binutils: stmp-config-target-binutils
+# We do not want to enable shared libraries in binutils
+BINUTILS_CONFIG_ARGS=--prefix=$(prefix) \
+	--target=${cur_target} --host=${cur_host} --build=${cur_build} \
+	$(baseargs) --disable-shared
+stmp-config-target-binutils: config.status $(canadian_stmp)
+	([ -d ${BINUTILS_VERSION} ] || \
+	  mkdir ${BINUTILS_VERSION}) && \
+	($(canadian_env) \
+	 cd ${BINUTILS_VERSION} ; \
+	 $(call find-package-srcdir, ${BINUTILS_VERSION})/configure \
+	  $(BINUTILS_CONFIG_ARGS)) && \
+	$(STAMP) $@
+build-target-binutils: stmp-build-target-binutils
+stmp-build-target-binutils: stmp-config-target-binutils
+	($(canadian_env) \
+	 $(MAKE) -C ${BINUTILS_VERSION}) && $(STAMP) $@
+install-target-binutils: stmp-build-target-binutils
+	($(canadian_env) \
+	 $(MAKE) -C ${BINUTILS_VERSION} install)
+
+# target gold rules.  We need these only if BINUTILS_VERSION != GOLD_VERSION
+ifneq ($(BINUTILS_VERSION), $(GOLD_VERSION))
+.PHONY: config-target-gold build-target-gold install-target-gold
+config-target-gold: stmp-config-target-gold
+# We do not want to enable shared libraries in gold
+GOLD_CONFIG_ARGS=--prefix=$(prefix) \
+	--target=${target_alias} --host=${host} --build=${build} \
+	$(baseargs) --disable-shared
+stmp-config-target-gold: config.status
+	([ -d ${GOLD_VERSION} ] || \
+	  mkdir ${GOLD_VERSION}) && \
+	(cd ${GOLD_VERSION} ; \
+	 $(call find-package-srcdir, ${GOLD_VERSION})/configure \
+	  $(GOLD_CONFIG_ARGS)) && \
+	$(STAMP) $@
+build-target-gold: stmp-build-target-gold
+stmp-build-target-gold: stmp-config-target-gold
+	($(canadian_env) \
+     $(MAKE) -C ${GOLD_VERSION} && $(STAMP) $@)
+
+# If we use a different binutils version of gold, we build gold twice.  We
+# first build everything, including gold with the main binutils version and
+# then install it.  Then we build the gold-only binutils version and install
+# just gold.  We don't bother to skip building the first gold to simplify
+# handling of all combinations of --enable-gold[=*]
+
+install-target-gold: stmp-build-target-gold install-target-binutils
+	($(canadian_env) \
+     make -C $(GOLD_VERSION)/gold install)
+
+endif
+
+# target gcc rules
+
+# target gcc rules
+.PHONY: config-target-gcc build-target-gcc install-target-gcc
+.PHONY: install-target-gcc-gcc $(install-target-gcc-multilibs)
+config-target-gcc: stmp-config-target-gcc
+
+GCC_CONFIG_ARGS=--prefix=$(prefix) \
+	  --target=${cur_target} --host=${cur_host} --build=${cur_build} \
+	  --with-gnu-as --with-gnu-ld --enable-languages=c,c++
+
+# For gcc versions 4.3.0 and later, gmp and mpfr are required.
+# Also build libgcc is a seperate sub-target in 4.3.0+.
+ifeq ($(GCC_MIN_VERSION_4_3_0),yes)
+stmp-config-target-gcc: stmp-install-host-gmp stmp-install-host-mpfr
+GCC_CONFIG_ARGS += --with-gmp=$(TEMP_INSTALLDIR) --with-mpfr=$(TEMP_INSTALLDIR)
+endif
+
+# For gcc versions 4.5.0 and higher, mpc is required.
+ifeq ($(GCC_MIN_VERSION_4_5_0),yes)
+stmp-config-target-gcc: stmp-install-host-mpc
+GCC_CONFIG_ARGS += --with-mpc=$(TEMP_INSTALLDIR)
+endif
+
+# Add Android specific gcc options.
+# FIXME: These should be overridable by configure options.
+
+
+# Target indenpendent Android gcc options.
+ifeq ($(BUILD_ANDROID_GCC),yes)
+GCC_CONFIG_ARGS += $(GCC_CONFIG_LIBSTDCXX_V3) --disable-libssp \
+	--enable-threads --disable-nls --disable-libmudflap --disable-libgomp \
+	--disable-libstdc__-v3 --disable-sjlj-exceptions --disable-shared \
+	--disable-tls
+CFLAGS_FOR_TARGET += -DTARGET_POSIX_IO -fno-short-enums
+
+ifeq ($(target_cpu),x86)
+# Options brought in from core/combo/* for IA
+CFLAGS_FOR_TARGET += \
+	-DANDROID -D__ANDROID__ -Ulinux \
+	-fPIC -Wa,--noexecstack -m32 -fstack-protector \
+	-W -Wall -Werror=address -Werror=format-security -Werror=non-virtual-dtor -Werror=return-type \
+	-Werror=sequence-point -Winit-self -Wno-multichar -Wno-unused -Wpointer-arith -Wstrict-aliasing=2 \
+	-fexceptions -ffunction-sections -finline-functions \
+	-finline-limit=300 -fmessage-length=0 -fno-inline-functions-called-once \
+	-fno-strict-aliasing -frtti \
+	-fstrict-aliasing -funswitch-loops -funwind-tables \
+	-march=atom -mbionic -mfpmath=sse -mstackrealign -DUSE_SSE2
+
+LDFLAGS_FOR_TARGET += \
+	-m32 -O2 -g -fPIC \
+	-nostartfiles \
+	-Wl,-z,noexecstack -Wl,--gc-sections -nostdlib \
+	-fexceptions -frtti -fstrict-aliasing -ffunction-sections -finline-functions  \
+	-finline-limit=300 -fno-inline-functions-called-once \
+	-funswitch-loops -funwind-tables -mstackrealign \
+	-ffunction-sections -funwind-tables -fmessage-length=0 \
+	-march=atom -mstackrealign -mfpmath=sse -mbionic \
+	-Wno-multichar -Wl,-z,noexecstack -Werror=format-security -Wstrict-aliasing=2 \
+	-W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor \
+	-Werror=address -Werror=sequence-point \
+	-Werror=format-security -Wl,--no-undefined
+endif
+
+# ARM specific options.
+ifeq ($(target_cpu),arm)
+GCC_CONFIG_ARGS += --with-float=soft --with-fpu=vfp --with-arch=armv5te \
+	--enable-target-optspace
+ifneq ($(target_os),linux-androideabi)
+GCC_CONFIG_ARGS += --with-abi=aapcs
+endif
+endif
+
+endif
+
+# We add the baseargs and the end so that they override any default args
+GCC_CONFIG_ARGS += $(baseargs)
+
+# We have to add -mandroid in target CFLAGS and CXXFLAGS
+stmp-config-target-gcc: config.status stmp-build-target-binutils
+	([ -d ${GCC_VERSION} ] || \
+	  mkdir ${GCC_VERSION}) && \
+	($(canadian_env) \
+	 cd ${GCC_VERSION} ; \
+	 $(TARGET_BINUTILS_EXPORTS) ; \
+	 export CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" ; \
+	 export CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" ; \
+	 export LDFLAGS_FOR_TARGET="$(LDFLAGS_FOR_TARGET)" ; \
+	 $(call find-package-srcdir, ${GCC_VERSION})/configure \
+	   $(GCC_CONFIG_ARGS)) && \
+	$(STAMP) $@
+build-target-gcc: stmp-build-target-gcc
+stmp-build-target-gcc: stmp-config-target-gcc
+	($(canadian_env) \
+	 $(MAKE) -C ${GCC_VERSION} \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LDFLAGS_FOR_TARGET="$(LDFLAGS_FOR_TARGET)" \
+		$(gcc_build_target)) \
+	&& $(STAMP) $@
+install-target-gcc-gcc: stmp-build-target-gcc
+	($(canadian_env) \
+	 $(MAKE) -C ${GCC_VERSION} $(gcc_install_target))
+install-target-gcc: install-target-gcc-gcc $(install-target-gcc-multilibs)
+
+# minimal gcc rules
+# minimal gcc only builds the C and C++ compilers and libgcc
+# We use the full gcc configure rules.
+.PHONY: build-target-minimal-gcc install-target-minimal-gcc
+ifeq ("$(GCC_MIN_VERSION_4_3_0)","yes")
+MINIMAL_GCC_BUILD_TARGETS:= gcc target-libgcc 
+else
+MINIMAL_GCC_BUILD_TARGETS:= gcc
+endif
+
+build-target-minimal-gcc: stmp-build-target-minimal-gcc
+stmp-build-target-minimal-gcc: stmp-config-target-gcc
+	($(canadian_env) \
+	 $(MAKE) -C ${GCC_VERSION} \
+		$(call prefix-list, all-, $(MINIMAL_GCC_BUILD_TARGETS))) && \
+	$(STAMP) $@
+install-target-minimal-gcc: stmp-build-target-minimal-gcc
+	($(canadian_env) \
+	 $(MAKE) -C ${GCC_VERSION} \
+		$(call prefix-list, install-, $(MINIMAL_GCC_BUILD_TARGETS)))
+
+# target newlib rules
+.PHONY: config-target-newlib build-target-newlib install-target-newlib
+config-target-newlib: stmp-config-target-newlib
+NEWLIB_CONFIG_ARGS=$(baseargs) --prefix=$(prefix) \
+	  --target=${cur_target} --host=${cur_host} --build=${cur_build}
+
+stmp-config-target-newlib: stmp-build-target-binutils \
+			   stmp-build-target-minimal-gcc
+	([ -d ${NEWLIB_VERSION} ] || \
+	  mkdir ${NEWLIB_VERSION}) && \
+	($(canadian_env) \
+	 cd ${NEWLIB_VERSION} ; \
+	 $(TARGET_BINUTILS_EXPORTS) ; \
+	 $(TARGET_MINIMAL_GCC_EXPORTS) ; \
+	 $(call find-package-srcdir, ${NEWLIB_VERSION})/configure \
+	  $(NEWLIB_CONFIG_ARGS)) && \
+	$(STAMP) $@
+stmp-build-target-newlib: stmp-config-target-newlib
+	($(canadian_env) \
+	 $(MAKE) -C ${NEWLIB_VERSION}) && $(STAMP) $@
+install-target-newlib: stmp-build-target-newlib
+	($(canadian_env) \
+	 $(MAKE) -C ${NEWLIB_VERSION} install)
+
+# host gmp rules
+.PHONY: config-host-gmp build-host-gmp install-host-gmp
+config-host-gmp: stmp-config-host-gmp
+GMP_CONFIG_ARGS=$(baseargs) --prefix=$(TEMP_INSTALLDIR) --disable-shared \
+	  --host=${cur_host} --build=${cur_build}
+stmp-config-host-gmp: config.status $(canadian_stmp)
+	([ -d ${GMP_VERSION} ] || \
+	  mkdir ${GMP_VERSION}) && \
+	($(canadian_env) \
+	 cd ${GMP_VERSION} ; \
+	 $(call find-package-srcdir, ${GMP_VERSION})/configure \
+	  $(GMP_CONFIG_ARGS)) && \
+	$(STAMP) $@
+stmp-build-host-gmp: stmp-config-host-gmp
+	($(canadian_env) \
+	 $(MAKE) -C ${GMP_VERSION}) && $(STAMP) $@
+build-host-gmp: stmp-build-host-gmp
+# Need -j1 to avoid a race condition in building on OS X.
+stmp-install-host-gmp: stmp-build-host-gmp
+	($(canadian_env) \
+	 $(MAKE) -C ${GMP_VERSION} install -j1) && \
+	$(STAMP) $@
+install-host-gmp: stmp-install-host-gmp
+
+# host mpfr rules
+.PHONY: config-host-mpfr build-host-mpfr install-host-mpfr
+config-host-mpfr: stmp-config-host-mpfr
+MPFR_CONFIG_ARGS=$(baseargs) --prefix=$(TEMP_INSTALLDIR) --disable-shared \
+	  --host=${cur_host} --build=${cur_build} \
+	  --with-gmp=$(TEMP_INSTALLDIR)
+stmp-config-host-mpfr: config.status stmp-install-host-gmp
+	([ -d ${MPFR_VERSION} ] || \
+	  mkdir ${MPFR_VERSION}) && \
+	($(canadian_env) \
+	 cd ${MPFR_VERSION} ; \
+	 $(call find-package-srcdir, ${MPFR_VERSION})/configure \
+	  $(MPFR_CONFIG_ARGS)) && \
+	$(STAMP) $@
+stmp-build-host-mpfr: stmp-config-host-mpfr
+	($(canadian_env) \
+	 $(MAKE) -C ${MPFR_VERSION}) && $(STAMP) $@
+build-host-mpfr: stmp-build-host-mpfr
+stmp-install-host-mpfr: stmp-build-host-mpfr
+	($(canadian_env) \
+	 $(MAKE) -C ${MPFR_VERSION} install) && \
+	$(STAMP) $@
+install-host-mpfr: stmp-install-host-mpfr
+
+# host mpc rules
+.PHONY: config-host-mpc build-host-mpc install-host-mpc
+config-host-mpc: stmp-config-host-mpc
+MPC_CONFIG_ARGS=$(baseargs) --prefix=$(TEMP_INSTALLDIR) --disable-shared \
+	 --host=${cur_host} --build=${cur_build} \
+	 --with-gmp=$(TEMP_INSTALLDIR) --with-mpfr=$(TEMP_INSTALLDIR)
+stmp-config-host-mpc: config.status stmp-install-host-gmp stmp-install-host-mpfr
+	([ -d ${MPC_VERSION} ] || \
+	  mkdir ${MPC_VERSION}) && \
+	($(canadian_env) \
+	 cd ${MPC_VERSION} ; \
+	 $(call find-package-srcdir, ${MPC_VERSION})/configure \
+	  $(MPC_CONFIG_ARGS)) && \
+	$(STAMP) $@
+stmp-build-host-mpc: stmp-config-host-mpc
+	($(canadian_env) \
+	 $(MAKE) -C ${MPC_VERSION}) && $(STAMP) $@
+build-host-mpc: stmp-build-host-mpc
+stmp-install-host-mpc: stmp-build-host-mpc
+	($(canadian_env) \
+	 $(MAKE) -C ${MPC_VERSION} install) && \
+	$(STAMP) $@
+install-host-mpc: stmp-install-host-mpc
+
+# target gdb rules
+.PHONY: config-target-gdb build-target-gdb install-target-gdb
+config-target-gdb: stmp-config-target-gdb
+
+GDB_CONFIG_ARGS=$(baseargs) --prefix=$(prefix) \
+	--target=$(GDB_TARGET) --host=${cur_host} --build=${cur_build} \
+	--disable-nls
+
+stmp-config-target-gdb: config.status $(canadian_stmp)
+	([ -d ${GDB_VERSION} ] || \
+	  mkdir ${GDB_VERSION}) && \
+	($(canadian_env) \
+	 cd ${GDB_VERSION} ; \
+	 $(call find-package-srcdir, ${GDB_VERSION})/configure \
+	  $(GDB_CONFIG_ARGS)) && \
+	$(STAMP) $@
+build-target-gdb: stmp-build-target-gdb
+stmp-build-target-gdb: stmp-config-target-gdb
+	($(canadian_env) \
+	 $(MAKE) -C ${GDB_VERSION}) && $(STAMP) $@
+install-target-gdb: stmp-build-target-gdb
+	($(canadian_env) \
+	 $(MAKE) -C ${GDB_VERSION} install)
+
+# clean rules
+.PHONY: clean
+clean:
+	$(RM) -r $(TEMP_INSTALLDIR) stmp-build-* stmp-install-* && \
+	for sub in [ * ]; do \
+	  if [ -f $$sub/Makefile ]; then \
+	    $(MAKE) -C $$sub clean ; \
+	  fi; \
+	done
+
+.PHONY: distclean
+distclean:
+	@$(RM) -r config.log config.status \
+		  $(TEMP_INSTALLDIR) temp-src \
+		  stmp-config-* stmp-build-* stmp-install-* && \
+	for sub in [ * ]; do \
+	  if [ -f $$sub/config.status ]; then \
+	    echo "Deleting " $$sub "..." && $(RM) -r $$sub ; \
+	  fi; \
+	done
+	@$(RM) Makefile

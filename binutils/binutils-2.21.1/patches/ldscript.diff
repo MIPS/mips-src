@@ -1,0 +1,303 @@
+Index: binutils-2.21.1/ld/emulparams/elf32bmip.sh
+===================================================================
+--- binutils-2.21.1.orig/ld/emulparams/elf32bmip.sh	2011-11-28 18:14:39.129350000 -0800
++++ binutils-2.21.1/ld/emulparams/elf32bmip.sh	2011-11-28 18:12:17.885910000 -0800
+@@ -6,7 +6,7 @@ SCRIPT_NAME=elf
+ OUTPUT_FORMAT="elf32-bigmips"
+ BIG_OUTPUT_FORMAT="elf32-bigmips"
+ LITTLE_OUTPUT_FORMAT="elf32-littlemips"
+-TEXT_START_ADDR=0x0400000
++TEXT_START_ADDR=0x80000
+ test -n "${EMBEDDED}" || DATA_ADDR=0x10000000
+ MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
+ COMMONPAGESIZE="CONSTANT (COMMONPAGESIZE)"
+@@ -64,12 +64,14 @@ OTHER_BSS_SYMBOLS='_fbss = .;'
+ OTHER_SECTIONS='
+   .gptab.sdata : { *(.gptab.data) *(.gptab.sdata) }
+   .gptab.sbss : { *(.gptab.bss) *(.gptab.sbss) }
++/*
+   .mdebug.abi32 : { KEEP(*(.mdebug.abi32)) }
+   .mdebug.abiN32 : { KEEP(*(.mdebug.abiN32)) }
+   .mdebug.abi64 : { KEEP(*(.mdebug.abi64)) }
+   .mdebug.abiO64 : { KEEP(*(.mdebug.abiO64)) }
+   .mdebug.eabi32 : { KEEP(*(.mdebug.eabi32)) }
+   .mdebug.eabi64 : { KEEP(*(.mdebug.eabi64)) }
++*/
+   .gcc_compiled_long32 : { KEEP(*(.gcc_compiled_long32)) }
+   .gcc_compiled_long64 : { KEEP(*(.gcc_compiled_long64)) }
+ '
+Index: binutils-2.21.1/ld/genscripts.sh
+===================================================================
+--- binutils-2.21.1.orig/ld/genscripts.sh	2011-11-28 18:14:39.095348000 -0800
++++ binutils-2.21.1/ld/genscripts.sh	2011-11-28 18:12:19.226005000 -0800
+@@ -239,7 +239,8 @@ if [ "x${use_sysroot}" != "xyes" ] ; the
+   fi
+ fi
+ 
+-LIB_SEARCH_DIRS=`echo ${LIB_PATH} | sed -e 's/:/ /g' -e 's/\([^ ][^ ]*\)/SEARCH_DIR(\\"\1\\");/g'`
++# For Android
++#LIB_SEARCH_DIRS=`echo ${LIB_PATH} | sed -e 's/:/ /g' -e 's/\([^ ][^ ]*\)/SEARCH_DIR(\\"\1\\");/g'`
+ 
+ # We need it for testsuite.
+ set $EMULATION_LIBPATH
+@@ -305,6 +306,7 @@ LD_FLAG=
+ DATA_ALIGNMENT=${DATA_ALIGNMENT_}
+ RELOCATING=" "
+ ( echo "/* Default linker script, for normal executables */"
++  echo "/* Modified for Android from elf32ltsmip.x */"
+   . ${CUSTOMIZER_SCRIPT}
+   . ${srcdir}/scripttempl/${SCRIPT_NAME}.sc
+ ) | sed -e '/^ *$/d;s/[ 	]*$//' > ldscripts/${EMULATION_NAME}.x
+@@ -358,6 +360,7 @@ if test -n "$GENERATE_SHLIB_SCRIPT"; the
+     DATA_ALIGNMENT=${DATA_ALIGNMENT_sc-${DATA_ALIGNMENT}}
+     COMBRELOC=ldscripts/${EMULATION_NAME}.xsc.tmp
+     ( echo "/* Script for --shared -z combreloc: shared library, combine & sort relocs */"
++      echo "/* Modified for Android from elf32ltsmip.xsc */"
+       . ${CUSTOMIZER_SCRIPT}
+       . ${srcdir}/scripttempl/${SCRIPT_NAME}.sc
+     ) | sed -e '/^ *$/d;s/[ 	]*$//' > ldscripts/${EMULATION_NAME}.xsc
+Index: binutils-2.21.1/ld/scripttempl/elf.sc
+===================================================================
+--- binutils-2.21.1.orig/ld/scripttempl/elf.sc	2011-11-28 18:14:39.193355000 -0800
++++ binutils-2.21.1/ld/scripttempl/elf.sc	2011-11-28 18:12:12.833538000 -0800
+@@ -119,7 +119,7 @@ if test -z "${INITIAL_READONLY_SECTIONS}
+   INITIAL_READONLY_SECTIONS=".interp       ${RELOCATING-0} : { *(.interp) }"
+ fi
+ if test -z "$PLT"; then
+-  IPLT=".iplt         ${RELOCATING-0} : { *(.iplt) }"
++  #IPLT=".iplt         ${RELOCATING-0} : { *(.iplt) }"
+   PLT=".plt          ${RELOCATING-0} : { *(.plt)${IREL_IN_PLT+ *(.iplt)} }
+   ${IREL_IN_PLT-$IPLT}"
+ fi
+@@ -148,8 +148,8 @@ RELA_IPLT=".rela.iplt    ${RELOCATING-0}
+     }"
+ DYNAMIC=".dynamic      ${RELOCATING-0} : { *(.dynamic) }"
+ RODATA=".${RODATA_NAME}       ${RELOCATING-0} : { *(.${RODATA_NAME}${RELOCATING+ .${RODATA_NAME}.* .gnu.linkonce.r.*}) }"
+-DATARELRO=".data.rel.ro : { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro* .gnu.linkonce.d.rel.ro.*) }"
+-DISCARDED="/DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }"
++DATARELRO=".data.rel.ro : { *(.data.rel.ro.local*) *(.data.rel.ro*) }"
++DISCARDED="/DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.mdebug.*) }"
+ if test -z "${NO_SMALL_DATA}"; then
+   SBSS=".${SBSS_NAME}         ${RELOCATING-0} :
+   {
+@@ -222,20 +222,8 @@ test "${LARGE_SECTIONS}" = "yes" && LARG
+     *(.ldata${RELOCATING+ .ldata.* .gnu.linkonce.l.*})
+     ${RELOCATING+. = ALIGN(. != 0 ? ${ALIGNMENT} : 1);}
+   }"
+-INIT_ARRAY=".init_array   ${RELOCATING-0} :
+-  {
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__init_array_start = .);}}
+-    KEEP (*(SORT(.init_array.*)))
+-    KEEP (*(.init_array))
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__init_array_end = .);}}
+-  }"
+-FINI_ARRAY=".fini_array   ${RELOCATING-0} :
+-  {
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__fini_array_start = .);}}
+-    KEEP (*(SORT(.fini_array.*)))
+-    KEEP (*(.fini_array))
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__fini_array_end = .);}}
+-  }"
++INIT_ARRAY=".init_array   ${RELOCATING-0} : { KEEP (*(.init_array)) }"
++FINI_ARRAY=".fini_array   ${RELOCATING-0} : { KEEP (*(.fini_array)) }"
+ CTOR=".ctors        ${CONSTRUCTING-0} : 
+   {
+     ${CONSTRUCTING+${CTOR_START}}
+@@ -278,8 +266,8 @@ STACK="  .stack        ${RELOCATING-0}${
+     *(.stack)
+   }"
+ 
+-TEXT_START_ADDR="SEGMENT_START(\"text-segment\", ${TEXT_START_ADDR})"
+-SHLIB_TEXT_START_ADDR="SEGMENT_START(\"text-segment\", ${SHLIB_TEXT_START_ADDR:-0})"
++TEXT_START_ADDR="${TEXT_START_ADDR}"
++SHLIB_TEXT_START_ADDR="0"
+ 
+ # if this is for an embedded system, don't add SIZEOF_HEADERS.
+ if [ -z "$EMBEDDED" ]; then
+@@ -305,7 +293,8 @@ ${RELOCATING- /* For some reason, the So
+ SECTIONS
+ {
+   /* Read-only sections, merged into text segment: */
+-  ${CREATE_SHLIB-${CREATE_PIE-${RELOCATING+PROVIDE (__executable_start = ${TEXT_START_ADDR}); . = ${TEXT_BASE_ADDRESS};}}}
++  ${CREATE_SHLIB-${CREATE_PIE-${RELOCATING+PROVIDE (__executable_start = ${TEXT_START_ADDR});
++  . = ${TEXT_BASE_ADDRESS};}}}
+   ${CREATE_SHLIB+${RELOCATING+. = ${SHLIB_TEXT_START_ADDR} + SIZEOF_HEADERS;}}
+   ${CREATE_PIE+${RELOCATING+. = ${SHLIB_TEXT_START_ADDR} + SIZEOF_HEADERS;}}
+   ${INITIAL_READONLY_SECTIONS}
+@@ -341,8 +330,8 @@ eval $COMBRELOCCAT <<EOF
+   .rel.${RODATA_NAME}   ${RELOCATING-0} : { *(.rel.${RODATA_NAME}${RELOCATING+ .rel.${RODATA_NAME}.* .rel.gnu.linkonce.r.*}) }
+   .rela.${RODATA_NAME}  ${RELOCATING-0} : { *(.rela.${RODATA_NAME}${RELOCATING+ .rela.${RODATA_NAME}.* .rela.gnu.linkonce.r.*}) }
+   ${OTHER_READONLY_RELOC_SECTIONS}
+-  .rel.data.rel.ro ${RELOCATING-0} : { *(.rel.data.rel.ro${RELOCATING+* .rel.gnu.linkonce.d.rel.ro.*}) }
+-  .rela.data.rel.ro ${RELOCATING-0} : { *(.rela.data.rel.ro${RELOCATING+* .rela.gnu.linkonce.d.rel.ro.*}) }
++  .rel.data.rel.ro ${RELOCATING-0} : { *(.rel.data.rel.ro${RELOCATING+*})  }
++  .rela.data.rel.ro ${RELOCATING-0} : { *(.rela.data.rel.ro${RELOCATING+*}) }
+   .rel.data     ${RELOCATING-0} : { *(.rel.data${RELOCATING+ .rel.data.* .rel.gnu.linkonce.d.*}) }
+   .rela.data    ${RELOCATING-0} : { *(.rela.data${RELOCATING+ .rela.data.* .rela.gnu.linkonce.d.*}) }
+   ${OTHER_READWRITE_RELOC_SECTIONS}
+@@ -366,8 +355,6 @@ eval $COMBRELOCCAT <<EOF
+   ${REL_LARGE}
+   ${IREL_IN_PLT+$REL_IFUNC}
+   ${IREL_IN_PLT+$RELA_IFUNC}
+-  ${IREL_IN_PLT-$REL_IPLT}
+-  ${IREL_IN_PLT-$RELA_IPLT}
+ EOF
+ 
+ if [ -n "$COMBRELOC" ]; then
+@@ -388,20 +375,8 @@ EOF
+ fi
+ 
+ cat >> ldscripts/dyntmp.$$ <<EOF
+-  .rel.plt      ${RELOCATING-0} :
+-    {
+-      *(.rel.plt)
+-      ${IREL_IN_PLT+${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__rel_iplt_start = .);}}}
+-      ${IREL_IN_PLT+${RELOCATING+*(.rel.iplt)}}
+-      ${IREL_IN_PLT+${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__rel_iplt_end = .);}}}
+-    }
+-  .rela.plt     ${RELOCATING-0} :
+-    {
+-      *(.rela.plt)
+-      ${IREL_IN_PLT+${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__rela_iplt_start = .);}}}
+-      ${IREL_IN_PLT+${RELOCATING+*(.rela.iplt)}}
+-      ${IREL_IN_PLT+${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__rela_iplt_end = .);}}}
+-    }
++  .rel.plt      ${RELOCATING-0} : { *(.rel.plt) }
++  .rela.plt     ${RELOCATING-0} : { *(.rela.plt) }
+   ${OTHER_PLT_RELOC_SECTIONS}
+ EOF
+ 
+@@ -432,10 +407,6 @@ cat <<EOF
+   .text         ${RELOCATING-0} :
+   {
+     ${RELOCATING+${TEXT_START_SYMBOLS}}
+-    ${RELOCATING+*(.text.unlikely .text.*_unlikely)}
+-    ${RELOCATING+*(.text.exit .text.exit.*)}
+-    ${RELOCATING+*(.text.startup .text.startup.*)}
+-    ${RELOCATING+*(.text.hot .text.hot.*)}
+     *(.text .stub${RELOCATING+ .text.* .gnu.linkonce.t.*})
+     /* .gnu.warning sections are handled specially by elf32.em.  */
+     *(.gnu.warning)
+@@ -457,30 +428,37 @@ cat <<EOF
+   ${OTHER_READONLY_SECTIONS}
+   .eh_frame_hdr : { *(.eh_frame_hdr) }
+   .eh_frame     ${RELOCATING-0} : ONLY_IF_RO { KEEP (*(.eh_frame)) }
+-  .gcc_except_table ${RELOCATING-0} : ONLY_IF_RO { *(.gcc_except_table .gcc_except_table.*) }
++  .gcc_except_table ${RELOCATING-0} : ONLY_IF_RO { KEEP(*(.gcc_except_table)) *(.gcc_except_table.*) }
+ 
+-  /* Adjust the address for the data segment.  We want to adjust up to
+-     the same address within the page on the next page up.  */
+-  ${CREATE_SHLIB-${CREATE_PIE-${RELOCATING+. = ${DATA_ADDR-${DATA_SEGMENT_ALIGN}};}}}
+-  ${CREATE_SHLIB+${RELOCATING+. = ${SHLIB_DATA_ADDR-${DATA_SEGMENT_ALIGN}};}}
+-  ${CREATE_PIE+${RELOCATING+. = ${SHLIB_DATA_ADDR-${DATA_SEGMENT_ALIGN}};}}
++  /* Adjust the address for the data segment.  We want to align at exactly
++     a page boundary to make life easier for apriori. */
++/*  ${CREATE_SHLIB-${CREATE_PIE-${RELOCATING+. = ${DATA_ADDR-${DATA_SEGMENT_ALIGN}};}}}
++   ${CREATE_SHLIB+${RELOCATING+. = ${SHLIB_DATA_ADDR-${DATA_SEGMENT_ALIGN}};}}
++  ${CREATE_PIE+${RELOCATING+. = ${SHLIB_DATA_ADDR-${DATA_SEGMENT_ALIGN}};}} */
++  . = ALIGN(4096);
++  . = DATA_SEGMENT_ALIGN(4096,4096);
+ 
+   /* Exception handling  */
+   .eh_frame     ${RELOCATING-0} : ONLY_IF_RW { KEEP (*(.eh_frame)) }
+-  .gcc_except_table ${RELOCATING-0} : ONLY_IF_RW { *(.gcc_except_table .gcc_except_table.*) }
++  .gcc_except_table ${RELOCATING-0} : ONLY_IF_RW { KEEP(*(.gcc_except_table)) *(.gcc_except_table.*) }
+ 
+   /* Thread Local Storage sections  */
+   .tdata	${RELOCATING-0} : { *(.tdata${RELOCATING+ .tdata.* .gnu.linkonce.td.*}) }
+   .tbss		${RELOCATING-0} : { *(.tbss${RELOCATING+ .tbss.* .gnu.linkonce.tb.*})${RELOCATING+ *(.tcommon)} }
+-
+-  .preinit_array   ${RELOCATING-0} :
+-  {
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__preinit_array_start = .);}}
+-    KEEP (*(.preinit_array))
+-    ${RELOCATING+${CREATE_SHLIB-PROVIDE_HIDDEN (${USER_LABEL_PREFIX}__preinit_array_end = .);}}
+-  }
++  /* Ensure the __preinit_array_start label is properly aligned.  We
++     could instead move the label definition inside the section, but
++     the linker would then create the section even if it turns out to
++     be empty, which isn't pretty.  */
++  . = ALIGN(32 / 8);
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__preinit_array_start = .);}}
++  .preinit_array   ${RELOCATING-0} : { KEEP (*(.preinit_array)) }
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__preinit_array_end = .);}}
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__init_array_start = .);}}
+   ${RELOCATING+${INIT_ARRAY}}
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__init_array_end = .);}}
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__fini_array_start = .);}}
+   ${RELOCATING+${FINI_ARRAY}}
++  ${RELOCATING+${CREATE_SHLIB-PROVIDE (${USER_LABEL_PREFIX}__fini_array_end = .);}}
+   ${SMALL_DATA_CTOR-${RELOCATING+${CTOR}}}
+   ${SMALL_DATA_DTOR-${RELOCATING+${DTOR}}}
+   .jcr          ${RELOCATING-0} : { KEEP (*(.jcr)) }
+@@ -497,6 +475,7 @@ cat <<EOF
+ 
+   ${DATA_PLT+${PLT_BEFORE_GOT-${PLT}}}
+ 
++  ${OTHER_READWRITE_SECTIONS}
+   .data         ${RELOCATING-0} :
+   {
+     ${RELOCATING+${DATA_START_SYMBOLS}}
+@@ -505,7 +484,6 @@ cat <<EOF
+   }
+   .data1        ${RELOCATING-0} : { *(.data1) }
+   ${WRITABLE_RODATA+${RODATA}}
+-  ${OTHER_READWRITE_SECTIONS}
+   ${SMALL_DATA_CTOR+${RELOCATING+${CTOR}}}
+   ${SMALL_DATA_DTOR+${RELOCATING+${DTOR}}}
+   ${DATA_PLT+${PLT_BEFORE_GOT+${PLT}}}
+@@ -526,10 +504,8 @@ cat <<EOF
+    *(COMMON)
+    /* Align here to ensure that the .bss section occupies space up to
+       _end.  Align after .bss to ensure correct alignment even if the
+-      .bss section disappears because there are no input sections.
+-      FIXME: Why do we need it? When there is no .bss section, we don't
+-      pad the .data section.  */
+-   ${RELOCATING+. = ALIGN(. != 0 ? ${ALIGNMENT} : 1);}
++      .bss section disappears because there are no input sections.  */
++   ${RELOCATING+. = ALIGN(${ALIGNMENT});}
+   }
+   ${OTHER_BSS_SECTIONS}
+   ${RELOCATING+${OTHER_BSS_END_SYMBOLS}}
+@@ -537,7 +513,9 @@ cat <<EOF
+   ${LARGE_SECTIONS}
+   ${RELOCATING+. = ALIGN(${ALIGNMENT});}
+   ${RELOCATING+${OTHER_END_SYMBOLS}}
+-  ${RELOCATING+${END_SYMBOLS-${USER_LABEL_PREFIX}_end = .; PROVIDE (${USER_LABEL_PREFIX}end = .);}}
++  ${RELOCATING+${END_SYMBOLS-${USER_LABEL_PREFIX}_end = .;
++  _bss_end__ = . ; __bss_end__ = . ; __end__ = . ;
++  PROVIDE (${USER_LABEL_PREFIX}end = .);}}
+   ${RELOCATING+${DATA_SEGMENT_END}}
+ EOF
+ 
+Index: binutils-2.21.1/bfd/archive.c
+===================================================================
+--- binutils-2.21.1.orig/bfd/archive.c	2011-11-28 18:14:38.000000000 -0800
++++ binutils-2.21.1/bfd/archive.c	2012-03-05 18:44:58.154195000 -0800
+@@ -1755,7 +1755,7 @@ bfd_ar_hdr_from_filesystem (bfd *abfd, c
+     {
+       /* Assume we just "made" the member, and fake it.  */
+       struct bfd_in_memory *bim = (struct bfd_in_memory *) member->iostream;
+-      time (&status.st_mtime);
++      time ((time_t *)&status.st_mtime);
+       status.st_uid = getuid ();
+       status.st_gid = getgid ();
+       status.st_mode = 0644;
+Index: binutils-2.21.1/libiberty/getpagesize.c
+===================================================================
+--- binutils-2.21.1.orig/libiberty/getpagesize.c	2011-11-28 18:11:39.000000000 -0800
++++ binutils-2.21.1/libiberty/getpagesize.c	2012-03-05 18:45:26.204313000 -0800
+@@ -60,11 +60,13 @@ BUGS
+ # endif /* PAGESIZE */
+ #endif /* GNU_OUR_PAGESIZE */
+ 
++#if !defined(__BIONIC__)
+ int
+ getpagesize (void)
+ {
+   return (GNU_OUR_PAGESIZE);
+ }
++#endif
+ 
+ #else /* VMS */
+ 
